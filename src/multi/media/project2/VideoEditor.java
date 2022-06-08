@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Stack;
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
@@ -38,6 +39,20 @@ class Frame {
         this.actions = new ArrayList<>();
 
     }
+    
+    public Frame deepCopy()
+    {
+        Frame newFrame = new Frame(this.index);
+        ArrayList<Action> newActionList = new ArrayList<>();
+        
+        for(int i = 0;i < this.actions.size(); i++)
+        {
+            Action newAction = this.actions.get(i).deepCopy();
+            newActionList.add(newAction);
+        }
+        newFrame.actions = newActionList;
+        return newFrame;
+    }
 }
 
 public class VideoEditor implements Runnable {
@@ -45,7 +60,9 @@ public class VideoEditor implements Runnable {
     private Thread thread;
     JLabel ImageLabel;
     String videoPath;
-    ArrayList<Frame> frameList = new ArrayList<Frame>();
+    
+    Stack<ArrayList<Frame> > lastEdits = new Stack<>();
+    ArrayList<Frame> frameList = new ArrayList<>();
     String output = "test.mp4";
     String path = System.getProperty("user.dir") + "\\temp\\";
     VideoCapture cap;
@@ -186,6 +203,43 @@ public class VideoEditor implements Runnable {
         }
     }
 
+    private BufferedImage convertMatToBI(Mat matrix) {
+        int cols = matrix.cols();
+        int rows = matrix.rows();
+        int elemSize = (int) matrix.elemSize();
+        byte[] data = new byte[cols * rows * elemSize];
+        int type;
+
+        matrix.get(0, 0, data);
+
+        switch (matrix.channels()) {
+            case 1:
+                type = BufferedImage.TYPE_BYTE_GRAY;
+                break;
+
+            case 3:
+                type = BufferedImage.TYPE_3BYTE_BGR;
+
+                // bgr to rgb
+                byte b;
+                for (int i = 0; i < data.length; i = i + 3) {
+                    b = data[i];
+                    data[i] = data[i + 2];
+                    data[i + 2] = b;
+                }
+                break;
+
+            default:
+                return null;
+        }
+
+        BufferedImage image = new BufferedImage(cols, rows, type);
+        image.getRaster().setDataElements(0, 0, cols, rows, data);
+
+        return image;
+    }
+    
+   /*
     private BufferedImage convertMatToBI(Mat mat) {
         MatOfByte mob = new MatOfByte();
         Imgcodecs.imencode(".png", mat, mob);
@@ -197,7 +251,7 @@ public class VideoEditor implements Runnable {
             return null;
         }
     }
-
+*/
     public int read_frames() {
         cap.open(videoPath);
         int counter = 0;
@@ -244,7 +298,9 @@ public class VideoEditor implements Runnable {
         
         ImageLabel.setIcon(new ImageIcon(dimg));
     }
-
+    
+    
+    /* ========= EDITING ========= */
     private BufferedImage applyActions(Frame frame) {
         BufferedImage tempFrame = pngFrameAt(frame.index);
         for (int i = 0; i < frame.actions.size(); i++) {
@@ -252,8 +308,36 @@ public class VideoEditor implements Runnable {
         }
         return tempFrame;
     }
-
+    
+    public boolean isEdited()
+    {
+        return !lastEdits.isEmpty();
+    }
+    
+    void undoStep()
+    {
+        frameList = lastEdits.pop();
+        currentFrameIndex = 0;
+        endEditingFrame = frameList.size() - 1;
+        numOfFrames = frameList.size();
+        
+        viewFrame(0);
+    }
+    
+    void saveStep()
+    {
+        ArrayList<Frame> newFrameList = new ArrayList<>();
+        
+        for(int i = 0;i < frameList.size(); i++)
+        {
+            newFrameList.add(frameList.get(i).deepCopy());
+        }
+        lastEdits.push(newFrameList);
+    }
+    
     public void moveFrames(int startFrame, int endFrame, int to) {
+        saveStep();
+        
         if (!(startFrame < frameList.size() && endFrame < frameList.size() - 1 && to < frameList.size())) {
             return;
         }
@@ -268,7 +352,44 @@ public class VideoEditor implements Runnable {
         endEditingFrame = frameList.size() - 1;
 
     }
+    public void deleteFrames(int from, int to) {
+        saveStep();
+        
+        if (!(from < frameList.size() && to < frameList.size() - 1)) {
+            return;
+        }
+        for (int i = to; i >= from; i--) {
+            frameList.remove(i);
+        }
+        startEditingFrame = 0;
+        currentFrameIndex = 0;
+        endEditingFrame = frameList.size() - 1;
+        numOfFrames = frameList.size();
+    }
+    
 
+    public void addImageWaterMark(int from, int to, BufferedImage watermarkImage, float alpha, int x, int y) {
+        saveStep();
+        ImageWatermark imageWatermark = new ImageWatermark(x, y, alpha, watermarkImage);
+        for (int i = from; i <= to; i++) {
+            frameList.get(i).actions.add(imageWatermark);
+        }
+        viewFrame(currentFrameIndex);
+
+    }
+
+    public void addTextWatermark(int from, int to, String text, float alpha, Color color, int fontSize, int x, int y) {
+        saveStep();
+        
+        TextWaterMark textWaterMark = new TextWaterMark(text, x, y, color, alpha, fontSize);
+        for (int i = from; i <= to; i++) {
+            frameList.get(i).actions.add(textWaterMark);
+        }
+        viewFrame(currentFrameIndex);
+
+    }
+    
+    /* ================== */ 
     public void viewNextFrame() {
         if (currentFrameIndex + frameStep <= endEditingFrame) {
             currentFrameIndex += frameStep;
@@ -287,37 +408,7 @@ public class VideoEditor implements Runnable {
 
     }
 
-    public void deleteFrames(int from, int to) {
-        if (!(from < frameList.size() && to < frameList.size() - 1)) {
-            return;
-        }
-        for (int i = to; i >= from; i--) {
-            frameList.remove(i);
-        }
-        startEditingFrame = 0;
-        currentFrameIndex = 0;
-        endEditingFrame = frameList.size() - 1;
-    }
     
-
-    public void addImageWaterMark(int from, int to, BufferedImage watermarkImage, float alpha, int x, int y) {
-        ImageWatermark imageWatermark = new ImageWatermark(x, y, alpha, watermarkImage);
-        for (int i = from; i <= to; i++) {
-            frameList.get(i).actions.add(imageWatermark);
-        }
-        viewFrame(currentFrameIndex);
-
-    }
-
-    public void addTextWatermark(int from, int to, String text, float alpha, Color color, int fontSize, int x, int y) {
-        TextWaterMark textWaterMark = new TextWaterMark(text, x, y, color, alpha, fontSize);
-        for (int i = from; i <= to; i++) {
-            frameList.get(i).actions.add(textWaterMark);
-        }
-        viewFrame(currentFrameIndex);
-
-    }
-
     @Override
     public void run() {
 

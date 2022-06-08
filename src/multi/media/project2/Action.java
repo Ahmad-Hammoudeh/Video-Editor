@@ -12,4 +12,7 @@ import java.awt.image.BufferedImage;
  */
 public interface Action {
     public BufferedImage apply(BufferedImage frame);
+    
+    public Action deepCopy();
+    
 }

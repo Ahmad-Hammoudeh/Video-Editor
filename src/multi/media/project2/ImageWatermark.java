@@ -7,6 +7,8 @@ package multi.media.project2;
 import java.awt.AlphaComposite;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.WritableRaster;
 
 /**
  *
@@ -18,7 +20,7 @@ public class ImageWatermark implements Action {
     private int y;
     private float alpha;
     private BufferedImage waterMark;
-
+    
     public ImageWatermark(int x, int y, float alpha, BufferedImage waterMark) {
         this.x = x;
         this.y = y;
@@ -26,7 +28,19 @@ public class ImageWatermark implements Action {
         this.waterMark = waterMark;
     }
 
-    
+    @Override 
+    public Action deepCopy()
+    {
+        ColorModel cm = this.waterMark.getColorModel();
+        boolean isAlphaPremultiplied = cm.isAlphaPremultiplied();
+        WritableRaster raster = this.waterMark.copyData(this.waterMark.getRaster().createCompatibleWritableRaster());
+        BufferedImage newWaterMark =  new BufferedImage(cm, raster, isAlphaPremultiplied, null);
+        
+        
+        return new ImageWatermark(
+                this.x , this.y , this.alpha , newWaterMark);
+    }
+    @Override
     public BufferedImage apply(BufferedImage frame) {
         return addImageWatermark(frame,waterMark,alpha,x,y);
     }

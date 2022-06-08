@@ -33,7 +33,24 @@ public class TextWaterMark implements Action {
         this.alpha = alpha;
         this.fontSize = fontSize;
     }
-
+    
+    @Override
+    public Action deepCopy()
+    {
+        Color newColor = new Color(
+                this.color. getRed() , 
+                this.color.getGreen(),
+                this.color.getBlue());
+        
+        return new TextWaterMark(
+        this.text, 
+        this.x,
+        this.y,
+        newColor,
+        this.alpha,
+        this.fontSize);
+    }
+    
     @Override
     public BufferedImage apply(BufferedImage frame) {
         return addTextWatermark(frame, text, alpha, color, fontSize, x, y);
