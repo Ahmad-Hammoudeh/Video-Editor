@@ -7,8 +7,11 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.RenderingHints;
+import java.awt.Transparency;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -28,6 +31,8 @@ import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.VideoWriter;
 import org.opencv.videoio.Videoio;
 import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.core.CvType;
+import org.opencv.imgproc.Imgproc;
 
 class Frame {
 
@@ -39,14 +44,12 @@ class Frame {
         this.actions = new ArrayList<>();
 
     }
-    
-    public Frame deepCopy()
-    {
+
+    public Frame deepCopy() {
         Frame newFrame = new Frame(this.index);
         ArrayList<Action> newActionList = new ArrayList<>();
-        
-        for(int i = 0;i < this.actions.size(); i++)
-        {
+
+        for (int i = 0; i < this.actions.size(); i++) {
             Action newAction = this.actions.get(i).deepCopy();
             newActionList.add(newAction);
         }
@@ -60,8 +63,8 @@ public class VideoEditor implements Runnable {
     private Thread thread;
     JLabel ImageLabel;
     String videoPath;
-    
-    Stack<ArrayList<Frame> > lastEdits = new Stack<>();
+
+    Stack<ArrayList<Frame>> lastEdits = new Stack<>();
     ArrayList<Frame> frameList = new ArrayList<>();
     String output = "test.mp4";
     String path = System.getProperty("user.dir") + "\\temp\\";
@@ -76,52 +79,49 @@ public class VideoEditor implements Runnable {
     int numOfFramesPerSecond;
     Size frameSize;
     Boolean isPlay;
-    
+
     float heightResult;
     float widthResult;
 
-    private void resizeLabel(){
-        float height_Img =  (float) cap.get(Videoio.CAP_PROP_FRAME_HEIGHT);
-            
+    private void resizeLabel() {
+        float height_Img = (float) cap.get(Videoio.CAP_PROP_FRAME_HEIGHT);
+
         float width_Img = (float) cap.get(Videoio.CAP_PROP_FRAME_WIDTH);
 
-        float height_Label =  ImageLabel.getHeight();
+        float height_Label = ImageLabel.getHeight();
         float width_Label = ImageLabel.getWidth();
 
-        
+        if (height_Img > width_Img) {
 
-        if(height_Img > width_Img){
-
-            float t = height_Img / height_Label ;
-            ImageLabel.setSize((int) (width_Img / t) , (int) height_Label);
+            float t = height_Img / height_Label;
+            ImageLabel.setSize((int) (width_Img / t), (int) height_Label);
             ImageLabel.setPreferredSize(new Dimension((int) (width_Img / t), (int) height_Label));
-            widthResult = (int) (ImageLabel.getWidth() );
+            widthResult = (int) (ImageLabel.getWidth());
             heightResult = (int) (ImageLabel.getHeight());
 
-
-        }else if( height_Img < width_Img ){
+        } else if (height_Img < width_Img) {
 
             float t = width_Img / width_Label;
-            ImageLabel.setSize((int) (width_Label) , (int) (height_Img / t));
-            ImageLabel.setPreferredSize(new Dimension((int) (width_Label), (int) (height_Img / t) ));
-            widthResult = (int) (ImageLabel.getWidth() );
+            ImageLabel.setSize((int) (width_Label), (int) (height_Img / t));
+            ImageLabel.setPreferredSize(new Dimension((int) (width_Label), (int) (height_Img / t)));
+            widthResult = (int) (ImageLabel.getWidth());
             heightResult = (int) (ImageLabel.getHeight());
 
-        }else{
-            if(width_Label > height_Label){
+        } else {
+            if (width_Label > height_Label) {
 
-                ImageLabel.setSize((int) (height_Label) , (int) height_Label);
+                ImageLabel.setSize((int) (height_Label), (int) height_Label);
                 ImageLabel.setPreferredSize(new Dimension((int) (height_Label), (int) height_Label));
-                widthResult = (int) (ImageLabel.getHeight() );
+                widthResult = (int) (ImageLabel.getHeight());
                 heightResult = (int) (ImageLabel.getHeight());
 
-            }else{
-                widthResult = (int) (ImageLabel.getWidth() );
+            } else {
+                widthResult = (int) (ImageLabel.getWidth());
                 heightResult = (int) (ImageLabel.getWidth());
             }
         }
     }
-    
+
     public VideoEditor(JLabel label, String videoPath) {
         String currentPath = System.getProperty("user.dir") + "\\temp";
         File folder = new File(currentPath);
@@ -148,9 +148,7 @@ public class VideoEditor implements Runnable {
         this.currentFrameIndex = startEditingFrame;
         this.endEditingFrame = this.numOfFrames;
         this.isPlay = false;
-        
-        
-        
+
         System.out.println(frameList.size());
     }
 
@@ -238,20 +236,7 @@ public class VideoEditor implements Runnable {
 
         return image;
     }
-    
-   /*
-    private BufferedImage convertMatToBI(Mat mat) {
-        MatOfByte mob = new MatOfByte();
-        Imgcodecs.imencode(".png", mat, mob);
-        byte ba[];
-        ba = mob.toArray();
-        try {
-            return ImageIO.read(new ByteArrayInputStream(ba));
-        } catch (IOException ex) {
-            return null;
-        }
-    }
-*/
+
     public int read_frames() {
         cap.open(videoPath);
         int counter = 0;
@@ -279,7 +264,7 @@ public class VideoEditor implements Runnable {
                 }
                 counter++;
                 tempFrame.release();
-                
+
             }
         }
         cap.release();
@@ -289,17 +274,37 @@ public class VideoEditor implements Runnable {
     private void viewFrame(int index) {
         Frame currentFrame = frameList.get(index);
         BufferedImage frame = pngFrameAt(currentFrame.index);
-        
+
         frame = applyActions(currentFrame);
-        
-        Image dimg = frame.getScaledInstance((int)widthResult,(int) heightResult,
-                                
-        Image.SCALE_AREA_AVERAGING);
-        
+
+        Image dimg = frame.getScaledInstance((int) widthResult, (int) heightResult,
+                Image.SCALE_AREA_AVERAGING);
+
         ImageLabel.setIcon(new ImageIcon(dimg));
     }
+
+    private BufferedImage resizeBI(BufferedImage img, int height, int width) 
+    {
+        Image tmp = img.getScaledInstance(width, height, Image.SCALE_SMOOTH);
+        BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = resized.createGraphics();
+        g2d.drawImage(tmp, 0, 0, null);
+        g2d.dispose();
+        return resized;
+    }
     
+    public Mat resizeMat(Mat matImg , int height , int width) 
+    {
+        Mat resizeimage = new Mat();
+        Size sz = new Size(height, width);
+        
+        Imgproc.resize(matImg, resizeimage, sz);
+        
+        return resizeimage;
+    }
+        
     
+
     /* ========= EDITING ========= */
     private BufferedImage applyActions(Frame frame) {
         BufferedImage tempFrame = pngFrameAt(frame.index);
@@ -308,36 +313,32 @@ public class VideoEditor implements Runnable {
         }
         return tempFrame;
     }
-    
-    public boolean isEdited()
-    {
+
+    public boolean isEdited() {
         return !lastEdits.isEmpty();
     }
-    
-    void undoStep()
-    {
+
+    public void undoStep() {
         frameList = lastEdits.pop();
         currentFrameIndex = 0;
         endEditingFrame = frameList.size() - 1;
         numOfFrames = frameList.size();
-        
+
         viewFrame(0);
     }
-    
-    void saveStep()
-    {
+
+    private void saveStep() {
         ArrayList<Frame> newFrameList = new ArrayList<>();
-        
-        for(int i = 0;i < frameList.size(); i++)
-        {
+
+        for (int i = 0; i < frameList.size(); i++) {
             newFrameList.add(frameList.get(i).deepCopy());
         }
         lastEdits.push(newFrameList);
     }
-    
+
     public void moveFrames(int startFrame, int endFrame, int to) {
         saveStep();
-        
+
         if (!(startFrame < frameList.size() && endFrame < frameList.size() - 1 && to < frameList.size())) {
             return;
         }
@@ -352,9 +353,10 @@ public class VideoEditor implements Runnable {
         endEditingFrame = frameList.size() - 1;
 
     }
+
     public void deleteFrames(int from, int to) {
         saveStep();
-        
+
         if (!(from < frameList.size() && to < frameList.size() - 1)) {
             return;
         }
@@ -366,7 +368,6 @@ public class VideoEditor implements Runnable {
         endEditingFrame = frameList.size() - 1;
         numOfFrames = frameList.size();
     }
-    
 
     public void addImageWaterMark(int from, int to, BufferedImage watermarkImage, float alpha, int x, int y) {
         saveStep();
@@ -380,7 +381,7 @@ public class VideoEditor implements Runnable {
 
     public void addTextWatermark(int from, int to, String text, float alpha, Color color, int fontSize, int x, int y) {
         saveStep();
-        
+
         TextWaterMark textWaterMark = new TextWaterMark(text, x, y, color, alpha, fontSize);
         for (int i = from; i <= to; i++) {
             frameList.get(i).actions.add(textWaterMark);
@@ -388,8 +389,8 @@ public class VideoEditor implements Runnable {
         viewFrame(currentFrameIndex);
 
     }
-    
-    /* ================== */ 
+
+    /* ================== */
     public void viewNextFrame() {
         if (currentFrameIndex + frameStep <= endEditingFrame) {
             currentFrameIndex += frameStep;
@@ -408,12 +409,10 @@ public class VideoEditor implements Runnable {
 
     }
 
-    
     @Override
     public void run() {
 
 //        read_frames();
-
     }
 
     public void start() {
