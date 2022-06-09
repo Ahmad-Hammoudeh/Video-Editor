@@ -1,18 +1,10 @@
 package multi.media.project2;
 
-import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Image;
-import java.awt.RenderingHints;
-import java.awt.Transparency;
-import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,13 +17,10 @@ import javax.swing.JLabel;
 import org.apache.commons.io.FileUtils;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfByte;
 import org.opencv.core.Size;
 import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.VideoWriter;
 import org.opencv.videoio.Videoio;
-import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.core.CvType;
 import org.opencv.imgproc.Imgproc;
 
 class Frame {
@@ -273,9 +262,7 @@ public class VideoEditor implements Runnable {
 
     private void viewFrame(int index) {
         Frame currentFrame = frameList.get(index);
-        BufferedImage frame = pngFrameAt(currentFrame.index);
-
-        frame = applyActions(currentFrame);
+        BufferedImage frame = applyActions(currentFrame);
 
         Image dimg = frame.getScaledInstance((int) widthResult, (int) heightResult,
                 Image.SCALE_AREA_AVERAGING);
@@ -389,7 +376,38 @@ public class VideoEditor implements Runnable {
         viewFrame(currentFrameIndex);
 
     }
-
+    
+    public void addVideoWaterMark(int from , int to , float alpha , int x , int y , String videoPath)
+    {
+        saveStep();
+        
+        VideoCapture cap = new VideoCapture();
+        cap.open(videoPath);
+        int counter = 0;
+        int maxNumber = (int) cap.get(Videoio.CAP_PROP_FRAME_COUNT);
+        if (cap.isOpened()) 
+        {
+            while (counter < maxNumber && counter + from <= to) 
+            {
+                Mat tempFrame = new Mat();
+                cap.read(tempFrame);
+                if (tempFrame.size().empty()) 
+                {
+                    System.err.println("empty");
+                    counter++;
+                    continue;
+                }
+                BufferedImage result = convertMatToBI(tempFrame);
+                
+                ImageWatermark imageWatermark = new ImageWatermark(x, y, alpha, result);
+                frameList.get(counter + from).actions.add(imageWatermark);
+                
+                counter++;
+                tempFrame.release();
+            }
+        }
+        cap.release();
+    }
     /* ================== */
     public void viewNextFrame() {
         if (currentFrameIndex + frameStep <= endEditingFrame) {
